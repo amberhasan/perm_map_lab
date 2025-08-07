@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
+import FracSearchFZ.Polynomial;
+
 public class FiniteField {
 	static String newLine = System.getProperty("line.separator");
 	static int[] coef = null;
