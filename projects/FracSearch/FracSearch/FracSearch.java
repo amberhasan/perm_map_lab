@@ -40,6 +40,7 @@ public class FracSearch {
     static long startTime;
 
     public static void main(String[] args) throws IOException {
+        System.out.println("Here we are");
         parseArgs(args);
         //prime = 2;
         //power = 4;
@@ -298,7 +299,7 @@ public class FracSearch {
         }
         return result;
     }
-    
+
     public static int[][] dividePoly(int[] a, int[] b) { // returns polynomial a / polynomial b, result[0] = quotient, result[1] = remainder
         // Euclidean Division: https://en.wikipedia.org/wiki/Polynomial_greatest_common_divisor#Euclidean_division
         int[] q = {0};
@@ -342,7 +343,7 @@ public class FracSearch {
         }
         return r;
     }
-    
+    //we just basically reduce the f/g to its most low form
     public static int[] polyGCD(int[] a, int[] b) { // returns GCD of a and b
         //Euclid's Algorithm: https://en.wikipedia.org/wiki/Polynomial_greatest_common_divisor#Euclidean_division
         int[] rPrev = Arrays.copyOf(a, a.length);
@@ -472,6 +473,7 @@ public class FracSearch {
         return gOrbits;
     }
     
+    //basically the final minimal equivalence classes for each term index
     public static HashMap<Integer, ArrayList<Integer>> getMinFGMapValues(int degree) {
         ArrayList<ArrayList<Integer>> gOrbits = getGOrbits();
         HashMap<Integer, ArrayList<Integer>> indexElements = new HashMap<>();
@@ -502,7 +504,8 @@ public class FracSearch {
             indexElements.put(i, toAdd);
             //System.out.println("printing "+toAdd);
         }           
-        return indexElements;        
+        return indexElements;    //for each term index (the key), it stores the minimal representatives of that term’s FG-orbits. 
+        //The smallest coefficient in each FG-orbit, so the term and then -> the values the term can take (smallest # from each equivalence class since there can be multiple equivalence classes for each term)    
     }
     
     public static boolean[] createMask(BitSet bs, int degree) {
@@ -518,12 +521,12 @@ public class FracSearch {
     
     public static ArrayList<boolean[]> createFBitMasks() {
         ArrayList<boolean[]> masks = new ArrayList<>();
-        if(fdegree == 1) {
-            boolean[] mask = {false, false};
+        if(fdegree == 1) { //If fdegree = 1, there are basically no “middle” coefficients to vary.
+            boolean[] mask = {false, false}; 
             masks.add(mask);
             return masks;
         }
-        int numMasks = (int) Math.pow(2,fdegree-1); // eg. deg=5: [F X X X X F] 
+        int numMasks = (int) Math.pow(2,fdegree-1); // eg. deg=5: [F X X X X F] Because the first and last positions in the polynomial are fixed. So we are counting the combo of fixes. that's why it's 2^degree-1
         for(int x=0; x<numMasks; x++) {
             long[] curVal = {x};
             BitSet bs = BitSet.valueOf(curVal); // creates binary representation of x

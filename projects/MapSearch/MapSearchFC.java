@@ -10,7 +10,7 @@ public class MapSearchFC {
 //    static int fixedZeroDegree;
     static List<Integer> fixedZeroDegrees;
     static int[][] powerTable;
-    static boolean degModPrime;
+    static boolean degModPrime; //flag: is degree % prime == 0.
 
     static HashMap<Integer, ArrayList<Integer>> indexElements;
     static int lockIndex;
@@ -20,10 +20,10 @@ public class MapSearchFC {
     static boolean resume;
 
     static ArrayList<boolean[]> bitMasks;
-    static ArrayList<boolean[]> bitMasksDMP; //additional masks for when Degree % Prime = 0
-    static ArrayList<Integer> fixedDegrees = new ArrayList<>();
-    static ArrayList<Integer> fixedIndexes = new ArrayList<>();
-
+    static ArrayList<boolean[]> bitMasksDMP; //additional masks for when Degree % Prime = 0, Degree Mod Prime (symmetry of the field changes, and the usual coefficient masks (bitMasks) might miss valid permutations.)
+    static ArrayList<Integer> fixedDegrees = new ArrayList<>(); //which degree (term) you’re locking
+    static ArrayList<Integer> fixedIndexes = new ArrayList<>(); //what value you’re assigning to that term
+    //the coefficient array goes from highest degree to lowest, index 0 holds x^degree, index 1 holds x^{degree-1}, etc.
     public static void main(String[] args) throws IOException {
         parseArgs(args);
 
@@ -767,8 +767,9 @@ public class MapSearchFC {
 //        GF.initGF(prime, power);
 //    }
 
+    //java MapSearchFC <prime> <power> <degree> <deg1> <val1> <deg2> <val2> ...
     public static void parseArgs(String[] args) {
-        if(args.length < 3) {
+        if(args.length < 3) { //Validates that at least <prime> <power> <degree> are provided.
             System.out.println("Usage: java MapSearchFZ <prime> <power> <degree> <fixedZeroDegrees...>");
             System.exit(0);
         }
