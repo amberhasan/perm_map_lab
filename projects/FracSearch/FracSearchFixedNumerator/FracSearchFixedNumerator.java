@@ -214,6 +214,18 @@ public class FracSearchFixedNumerator {
         return poly;
     }
 
+    // multiply field element 'a' by a small scalar 's' in F_p (0..prime-1), using repeated addition
+    static int mulByPrimeScalar(int a, int s) {
+        if (s < 0) s = ((s % GF.prime) + GF.prime) % GF.prime;
+        else s = s % GF.prime;
+        int result = 0; // index of zero element in the field
+        for (int k = 0; k < s; k++) {
+            result = add(result, a);
+        }
+        return result;
+    }
+
+
     public static int add(int a, int b) { // a + b in GF
         return GF.addTable[a + b * GF.n];
     }
@@ -545,7 +557,7 @@ public class FracSearchFixedNumerator {
                     for(int element : gOrbit) {
                         int currentElement = element;
                         while(fullOrbit.add(currentElement)) {
-                            currentElement = mult(currentElement, i+1);
+                            currentElement = mulByPrimeScalar(currentElement, i + 1);
                         }
                     }
                     //System.out.println(i+": ");
@@ -827,7 +839,7 @@ public class FracSearchFixedNumerator {
     public static int[] fMap(int[] p) {
         int[] result = new int[p.length];
         for(int i=0; i<p.length; i++)
-            result[i] = mult(p[i], i+1);
+            result[i] = mulByPrimeScalar(p[i], i + 1);
         return result;
     }
     
@@ -846,14 +858,27 @@ public class FracSearchFixedNumerator {
             for(int b=0; b<GF.n; b++) {
                 int[] fofxpb = fOfXPlusB(curF, b);
                 int[] gofxpb = fOfXPlusB(curG, b);
-                // normalize f(x) using H-map: f(x) + c*g(x) / g(x)
-                int c = divide(subtract(0, fofxpb[fofxpb.length-1]), gofxpb[gofxpb.length-1]);
-                int[] hmapfofxpb = addPoly(fofxpb, multA(gofxpb, c));
+
+                // --- SAFE H-map normalization ---
+                int denom = gofxpb[gofxpb.length - 1];    // constant term of g(x+b)
+                int numer = fofxpb[fofxpb.length - 1];    // constant term of f(x+b)
+                int[] hmapfofxpb;
+
+                if (denom == 0) {
+                    // can't divide by zero -> skip normalization (equivalent to c = 0)
+                    hmapfofxpb = fofxpb;
+                } else {
+                    int c = divide(subtract(0, numer), denom);
+                    if (c < 0) c = 0; // just in case (shouldn't happen when denom != 0)
+                    hmapfofxpb = addPoly(fofxpb, multA(gofxpb, c));
+                }
+                // --------------------------------
+
                 String curFracString = Arrays.toString(hmapfofxpb) + " / " + Arrays.toString(gofxpb);
                 fofxpbMaps.put(curFracString, new int[][] {hmapfofxpb, gofxpb});
             }
         }
-        return fofxpbMaps; 
+        return fofxpbMaps;
     }
 
     public static void update() {
