@@ -39,6 +39,11 @@ public class FracSearchFixedNumerator {
     static long totalToCheck;
     static long startTime;
 
+    // Fixed F-coefficient controls
+    static List<Integer> fFixedZeroDegrees = new ArrayList<>(); // degrees d with coeff forced to 0
+    static List<Integer> fFixedIdx = new ArrayList<>();         // internal indexes for non-zero fixed coeffs
+    static List<Integer> fFixedValues = new ArrayList<>();      // values in GF for those indexes
+
     public static void main(String[] args) throws IOException {
         System.out.println("Here we are");
         parseArgs(args);
@@ -56,6 +61,7 @@ public class FracSearchFixedNumerator {
         fFGMapValues = getMinFGMapValues(fdegree);
         gFGMapValues = getMinFGMapValues(gdegree);
         fBitMasks = createFBitMasks();
+        applyFixedFOnMasks();
         gBitMasks = createGBitMasks();
         pDividesG = gdegree % prime == 0;  
       
@@ -104,7 +110,7 @@ public class FracSearchFixedNumerator {
                 }
                 curLockValueIndex = 1;  //skipping value 0 at index 0
                 //Create initial pp
-                int[] g = createPolynomial(gmask);
+                int[] g = createGPolynomial(gmask);
                 int[] gMaskIndexes = listIndexes(gmask);
                 //System.out.println(Arrays.toString(fmask) + " / " + Arrays.toString(gmask) + " " + lockIndex[0] + " " + lockIndex[1]);
                 do {
@@ -113,7 +119,7 @@ public class FracSearchFixedNumerator {
                         count += totalSkipped(fmask, gmask);
                         continue;
                     }                    
-                    int[] f = createPolynomial(fmask);
+                    int[] f = createFPolynomial(fmask);
                     int[] fMaskIndexes = listIndexes(fmask);
                     do {
                         count++;
@@ -157,7 +163,57 @@ public class FracSearchFixedNumerator {
         System.out.println(df.format((float)(endTime-startTime)/60000) + " min elapsed");
         System.out.println(foundFracPPs.size() + " NFPPs Found");
     }
+
+    static void applyFixedFOnMasks() {
+        if (fBitMasks == null) return;
+        for (boolean[] mask : fBitMasks) {
+            // zero-fixed degrees: disable variation at idx
+            for (int deg : fFixedZeroDegrees) {
+                int idx = fdegree - deg;
+                if (0 <= idx && idx < mask.length) mask[idx] = false;
+            }
+            // non-zero fixed degrees: also disable variation at idx
+            for (int idx : fFixedIdx) {
+                if (0 <= idx && idx < mask.length) mask[idx] = false;
+            }
+        }
+    }
     
+    static int[] createGPolynomial(boolean[] mask) {
+        int[] poly = new int[mask.length];
+        Arrays.fill(poly, 0);
+        poly[0] = 1; // monic leading term
+        for (int i = 0; i < mask.length; i++) {
+            if (mask[i]) poly[i] = 1;
+        }
+        return poly;    
+    }
+
+    static int[] createFPolynomial(boolean[] mask) {
+        int[] poly = new int[mask.length];
+        Arrays.fill(poly, 0);
+        poly[0] = 1; // monic leading term
+
+        // first, set the "free" (mask=true) positions to 1 (your original behavior)
+        for (int i = 0; i < mask.length; i++) {
+            if (mask[i]) poly[i] = 1;
+        }
+
+        // force zeros at the zero-fixed degrees (mask already disabled them, but enforce anyway)
+        for (int deg : fFixedZeroDegrees) {
+            int idx = fdegree - deg;
+            if (0 <= idx && idx < poly.length) poly[idx] = 0;
+        }
+
+        // write the non-zero fixed values
+        for (int k = 0; k < fFixedIdx.size(); k++) {
+            int idx = fFixedIdx.get(k);
+            int val = fFixedValues.get(k);
+            if (0 <= idx && idx < poly.length) poly[idx] = val;
+        }
+        return poly;
+    }
+
     public static int add(int a, int b) { // a + b in GF
         return GF.addTable[a + b * GF.n];
     }
@@ -826,37 +882,45 @@ public class FracSearchFixedNumerator {
     
     public static void parseArgs(String[] args) {
         if(args.length < 4) {
-            System.out.println("Usage: java FracSearch <prime> <power> <f-degree> <g-degree>");
+            System.out.println("Usage: java FracSearch <prime> <power> <f-degree> <g-degree> [<deg> <val>]... [-v]");
             System.out.println("f-degree must be strictly > g-degree");
-            System.out.println("options:");
-            System.out.println("     -v     verbose output of nFPPs");            
             System.exit(0);
         }
-        //initialize variables
         prime = Integer.parseInt(args[0]);
         power = Integer.parseInt(args[1]);
         fdegree = Integer.parseInt(args[2]);
         gdegree = Integer.parseInt(args[3]);
         GF.initGF(prime, power);
         verbose = false;
-        /*if(fdegree <= gdegree) {
-            System.out.println("f-degree must be strictly > g-degree");
-            System.exit(0);
-        }*/
-        // check additional options
-        if(args.length > 4) {
-            for(int x=4; x<args.length; x++) {
-                switch(args[x]) {
-                    case "-v":
-                        verbose = true;
-                        break;
-                    default:
-                        System.out.println("Unrecognized option "+args[x]);
-                        System.exit(0);
+
+        // parse extra args: pairs of <deg> <val> for F, plus optional -v anywhere
+        for (int i = 4; i < args.length; i++) {
+            if ("-v".equals(args[i])) { verbose = true; continue; }
+            // need a value after degree
+            if (i + 1 >= args.length) break;
+            // if next is a flag, stop
+            if ("-v".equals(args[i+1])) break;
+
+            int deg = Integer.parseInt(args[i]);
+            int val = Integer.parseInt(args[i+1]);
+            int idx = fdegree - deg; // internal index
+
+            if (idx < 0 || idx > fdegree) {
+                System.out.println("Ignoring out-of-range fixed F degree: " + deg);
+            } else if (val == 0) {
+                fFixedZeroDegrees.add(deg); // remember as degree (we map to idx later)
+            } else {
+                if (val < 0 || val >= GF.n) {
+                    System.out.println("Ignoring invalid GF value for F coeff at degree " + deg + ": " + val);
+                } else {
+                    fFixedIdx.add(idx);
+                    fFixedValues.add(val);
                 }
             }
-        }        
+            i++; // consumed a pair
+        }
     }
+
 }
 
 class GF 
