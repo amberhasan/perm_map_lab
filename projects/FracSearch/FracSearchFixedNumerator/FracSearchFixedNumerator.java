@@ -45,7 +45,6 @@ public class FracSearchFixedNumerator {
     static List<Integer> fFixedValues = new ArrayList<>();      // values in GF for those indexes
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Here we are");
         parseArgs(args);
         //prime = 2;
         //power = 4;
