@@ -135,7 +135,7 @@ public class FracSearchFixedNumerator {
                             outFile.write(toWrite);
                             outFile.flush();
                             foundFracPPs.addAll(equivalenceClass.keySet());
-                            String output = Arrays.toString(f) + " / " + Arrays.toString(g);                     
+                            String output = polyToString(f) + " / " + polyToString(g);
                             while(output.length() < maxStringLength())
                                 output += " ";
                             if(verbose) {
@@ -162,6 +162,27 @@ public class FracSearchFixedNumerator {
         System.out.println(df.format((float)(endTime-startTime)/60000) + " min elapsed");
         System.out.println(foundFracPPs.size() + " NFPPs Found");
     }
+
+    static String polyToString(int[] poly) {
+        StringBuilder sb = new StringBuilder();
+        int degree = poly.length - 1;
+        for (int i = 0; i < poly.length; i++) {
+            int coeff = poly[i];
+            if (coeff == 0) continue;
+            int power = degree - i;
+            if (sb.length() > 0) sb.append(" + ");
+            if (power == 0) {
+                sb.append(coeff);
+            } else if (power == 1) {
+                sb.append(coeff == 1 ? "x" : coeff + "x");
+            } else {
+                sb.append(coeff == 1 ? "x^" + power : coeff + "x^" + power);
+            }
+        }
+        if (sb.length() == 0) return "0";
+        return sb.toString();
+    }
+
 
     static void applyFixedFOnMasks() {
         if (fBitMasks == null) return;
