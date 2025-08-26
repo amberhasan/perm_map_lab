@@ -17,16 +17,31 @@ public class ComputeUlamDPLCS {
     }
 
     public static void main(String[] args) {
-        // Example permutations
-        String pi = "3124";
-        String sigma = "1342";
+        if (args.length < 2) {
+            System.out.println("Usage: java ComputeUlamDPLCS <perm1> <perm2> ...");
+            System.out.println("Example: java ComputeUlamDPLCS 3124 1342 4321");
+            return;
+        }
 
-        int lcsLength = longestCommonSubsequence(pi, sigma);
-        int ulamDistance = pi.length() - lcsLength;
+        int n = args[0].length();  // assume all permutations same length
+        int minDistance = Integer.MAX_VALUE;
 
-        System.out.println("pi = " + pi);
-        System.out.println("sigma = " + sigma);
-        System.out.println("LCS length = " + lcsLength);
-        System.out.println("Ulam distance = " + ulamDistance);
+        // Compute all pairwise Ulam distances
+        for (int i = 0; i < args.length; i++) {
+            for (int j = i + 1; j < args.length; j++) {
+                String pi = args[i];
+                String sigma = args[j];
+
+                int lcsLength = longestCommonSubsequence(pi, sigma);
+                int ulamDistance = pi.length() - lcsLength;
+
+                if (ulamDistance < minDistance) {
+                    minDistance = ulamDistance;
+                }
+            }
+        }
+        //input can be: java ComputeUlamDPLCS 3124 1342 4321
+        System.out.println("Minimum Ulam distance of this set = " + minDistance);
+        System.out.println("This is a PA(" + n + "," + minDistance + ")");
     }
 }
