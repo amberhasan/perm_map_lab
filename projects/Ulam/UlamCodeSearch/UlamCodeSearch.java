@@ -4,16 +4,28 @@ import java.io.*;
 public class UlamCodeSearch {
     static int n;
     static int d;
+    static boolean useCache = false;
+
     static List<int[]> permutations = new ArrayList<>();
-    static Map<Integer, List<Integer>> graph = new HashMap<>();
     static int maxCliqueSize = 0;
     static List<Integer> bestClique = new ArrayList<>();
 
+    // Optional neighbor cache (lazy fill)
+    static Map<Integer, Set<Integer>> neighborCache = new HashMap<>();
+
     public static void main(String[] args) {
-        if (args.length >= 2) {
+        // Parse input with optional -c flag for caching
+        List<String> argList = new ArrayList<>(Arrays.asList(args));
+        if (argList.contains("-c")) {
+            useCache = true;
+            argList.remove("-c");
+            System.out.println("Neighbor caching ENABLED.");
+        }
+
+        if (argList.size() >= 2) {
             try {
-                n = Integer.parseInt(args[0]);
-                d = Integer.parseInt(args[1]);
+                n = Integer.parseInt(argList.get(0));
+                d = Integer.parseInt(argList.get(1));
             } catch (NumberFormatException e) {
                 System.err.println("Error: n and d must be integers.");
                 System.exit(1);
@@ -29,15 +41,16 @@ public class UlamCodeSearch {
         System.out.println("Running UlamCodeSearch with n=" + n + " and d=" + d);
 
         generatePermutations();
-        buildGraph();
+        System.out.println("Generated " + permutations.size() + " permutations.");
         findMaxClique();
-        System.out.println("\nSearch finished. Largest clique size: " + maxCliqueSize);
+        System.out.println("\n✅ Search finished. Largest clique size: " + maxCliqueSize);
         System.out.println("Final clique permutations:");
         for (int idx : bestClique) {
             System.out.println(Arrays.toString(permutations.get(idx)));
         }
     }
 
+    // --- Step 1: Generate permutations ---
     static void generatePermutations() {
         int[] arr = new int[n];
         for (int i = 0; i < n; i++) arr[i] = i + 1;
@@ -62,37 +75,45 @@ public class UlamCodeSearch {
         arr[j] = temp;
     }
 
-    static void buildGraph() {
-        int total = permutations.size();
-        for (int i = 0; i < total; i++) {
-            graph.put(i, new ArrayList<>());
+    // --- Step 2: Neighbor generation (with optional caching) ---
+    static Set<Integer> getNeighbors(int idx) {
+        if (useCache && neighborCache.containsKey(idx)) {
+            return neighborCache.get(idx);
         }
-        for (int i = 0; i < total; i++) {
-            for (int j = i + 1; j < total; j++) {
-                if (ulamDistance(permutations.get(i), permutations.get(j)) >= d) {
-                    graph.get(i).add(j);
-                    graph.get(j).add(i);
-                }
+
+        Set<Integer> neighbors = new HashSet<>();
+        int[] base = permutations.get(idx);
+        for (int j = 0; j < permutations.size(); j++) {
+            if (j == idx) continue;
+            if (ulamDistance(base, permutations.get(j)) >= d) {
+                neighbors.add(j);
             }
         }
-        System.out.println("Graph built with " + total + " permutations.");
+
+        if (useCache) {
+            neighborCache.put(idx, neighbors);
+        }
+        return neighbors;
     }
 
     static int ulamDistance(int[] a, int[] b) {
-        int[][] dp = new int[n+1][n+1];
+        int[][] dp = new int[n + 1][n + 1];
         for (int i = 1; i <= n; i++) {
             for (int j = 1; j <= n; j++) {
-                if (a[i-1] == b[j-1])
-                    dp[i][j] = dp[i-1][j-1] + 1;
+                if (a[i - 1] == b[j - 1])
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
                 else
-                    dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
             }
         }
         return n - dp[n][n];
     }
 
+    // --- Step 3: Bron–Kerbosch algorithm using neighbors on demand ---
     static void findMaxClique() {
-        bronKerbosch(new HashSet<>(), new HashSet<>(graph.keySet()), new HashSet<>());
+        Set<Integer> allVertices = new HashSet<>();
+        for (int i = 0; i < permutations.size(); i++) allVertices.add(i);
+        bronKerbosch(new HashSet<>(), allVertices, new HashSet<>());
     }
 
     static void bronKerbosch(Set<Integer> R, Set<Integer> P, Set<Integer> X) {
@@ -111,20 +132,20 @@ public class UlamCodeSearch {
         }
 
         Integer pivot = !P.isEmpty() ? P.iterator().next() : null;
-        Set<Integer> neighbors = (pivot != null) ? new HashSet<>(graph.get(pivot)) : Collections.emptySet();
+        Set<Integer> pivotNeighbors = (pivot != null) ? getNeighbors(pivot) : Collections.emptySet();
 
         Set<Integer> loopSet = new HashSet<>(P);
-        loopSet.removeAll(neighbors);
+        loopSet.removeAll(pivotNeighbors);
 
         for (Integer v : loopSet) {
             Set<Integer> newR = new HashSet<>(R);
             newR.add(v);
 
             Set<Integer> newP = new HashSet<>(P);
-            newP.retainAll(graph.get(v));
+            newP.retainAll(getNeighbors(v));
 
             Set<Integer> newX = new HashSet<>(X);
-            newX.retainAll(graph.get(v));
+            newX.retainAll(getNeighbors(v));
 
             bronKerbosch(newR, newP, newX);
 
@@ -134,7 +155,7 @@ public class UlamCodeSearch {
     }
 
     static void saveCliqueToFile(List<Integer> clique, int size) {
-        String filename = "clique_" + size + ".txt";
+        String filename = String.format("clique_n%d_d%d_size%d.txt", n, d, size);
         try (PrintWriter out = new PrintWriter(new FileWriter(filename))) {
             out.println("Clique size: " + size);
             for (int idx : clique) {
