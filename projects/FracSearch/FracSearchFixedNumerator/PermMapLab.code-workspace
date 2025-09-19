@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "../../.."
+		},
+		{
+			"path": "../../../../amberhasan.github.io"
+		}
+	],
+	"settings": {
+		"java.project.referencedLibraries": [
+			"src/**/*.jar"
+		]
+	}
+}
