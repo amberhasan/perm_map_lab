@@ -5,12 +5,27 @@ public class UlamGreedySearch {
     static int n; // permutation length
     static int d; // minimum Ulam distance
     static int randomSeedCount = 0; // number of random permutations to pick initially
-    static List<int[]> solutionSet = new ArrayList<>(); // stores the final set of permutations
+    static List<int[]> solutionSet = new ArrayList<>(); // stores the current solution set
+    static Random rng; // global random generator
 
     public static void main(String[] args) {
         // --- Parse input ---
-        // Optional: -r k enables random seeding with k permutations
         List<String> argList = new ArrayList<>(Arrays.asList(args));
+
+        // Optional: -seed <val> sets fixed RNG seed
+        long seed = System.currentTimeMillis(); // default: time-based randomness
+        int seedIndex = argList.indexOf("-seed");
+        if (seedIndex != -1 && seedIndex + 1 < argList.size()) {
+            seed = Long.parseLong(argList.get(seedIndex + 1));
+            argList.remove(seedIndex + 1);
+            argList.remove(seedIndex);
+            System.out.println("Using fixed seed: " + seed);
+        } else {
+            System.out.println("Using time-based seed: " + seed);
+        }
+        rng = new Random(seed);
+
+        // Optional: -r k enables random seeding with k permutations
         int rIndex = argList.indexOf("-r");
         if (rIndex != -1 && rIndex + 1 < argList.size()) {
             randomSeedCount = Integer.parseInt(argList.get(rIndex + 1));
@@ -28,7 +43,6 @@ public class UlamGreedySearch {
                 System.exit(1);
             }
         } else {
-            // If no args given, ask interactively
             Scanner scanner = new Scanner(System.in);
             System.out.print("Enter n (permutation length): ");
             n = scanner.nextInt();
@@ -38,42 +52,67 @@ public class UlamGreedySearch {
 
         System.out.println("Running UlamGreedySearch with n=" + n + " and d=" + d);
 
-        // Main algorithm
         greedySearch();
-
-        // Print and save result
-        System.out.println("\n✅ Greedy search finished. Found set size: " + solutionSet.size());
-        for (int[] perm : solutionSet) {
-            System.out.println(Arrays.toString(perm));
-        }
-        saveSolutionToFile();
     }
 
     static void greedySearch() {
-        // Generate all permutations first
         List<int[]> allPerms = generateAllPermutations();
+        List<int[]> bestSolution = new ArrayList<>();
 
-        // --- Step 1: Random seeding ---
-        if (randomSeedCount > 0) {
-            // Shuffle permutation list and pick k random candidates for initial solutionSet
-            Collections.shuffle(allPerms, new Random());
-            Iterator<int[]> iter = allPerms.iterator();
+        while (true) {
+            solutionSet.clear();
+            List<int[]> candidatePerms = new ArrayList<>(allPerms);
+
+            // Shuffle once per pass to inject randomness
+            Collections.shuffle(candidatePerms, rng);
+
+            // --- Step 1: Seed phase (pick r random good candidates) ---
+            Iterator<int[]> iter = candidatePerms.iterator();
             while (iter.hasNext() && solutionSet.size() < randomSeedCount) {
                 int[] candidate = iter.next();
-                if (isGoodCandidate(candidate)) { // check distance to all chosen perms
+                if (isGoodCandidate(candidate)) {
                     solutionSet.add(candidate.clone());
-                    iter.remove();
                 }
+                iter.remove();
             }
-            // Sort remaining permutations back into lex order for reproducible greedy step
-            allPerms.sort(UlamGreedySearch::lexCompare);
-        }
 
-        // --- Step 2: Greedy lexicographic construction ---
-        for (int[] perm : allPerms) {
-            if (isGoodCandidate(perm)) {
-                solutionSet.add(perm.clone());
+            // --- Step 2: Greedy phase but on randomized order ---
+            iter = candidatePerms.iterator();
+            while (iter.hasNext()) {
+                int[] perm = iter.next();
+                if (isGoodCandidate(perm)) {
+                    solutionSet.add(perm.clone());
+                }
+                iter.remove();
             }
+
+            // --- Compare with best so far ---
+            if (solutionSet.size() > bestSolution.size()) {
+                bestSolution.clear();
+                for (int[] perm : solutionSet) bestSolution.add(perm.clone());
+                System.out.println("\n🎉 New best solution found! Size: " + bestSolution.size());
+                saveBestSolutionToFile(bestSolution);
+            }
+
+            System.out.println("Current solution size: " + solutionSet.size() +
+                               " | Best so far: " + bestSolution.size());
+
+            if (candidatePerms.isEmpty()) {
+                candidatePerms = generateAllPermutations();
+            }
+        }
+    }
+
+    static void saveBestSolutionToFile(List<int[]> bestSolution) {
+        String filename = String.format("best_greedy_n%d_d%d_size%d.txt", n, d, bestSolution.size());
+        try (PrintWriter out = new PrintWriter(new FileWriter(filename))) {
+            out.println("Best solution size: " + bestSolution.size());
+            for (int[] perm : bestSolution) {
+                out.println(Arrays.toString(perm));
+            }
+            System.out.println("💾 Saved new best solution to " + filename);
+        } catch (IOException e) {
+            System.err.println("Error saving best solution: " + e.getMessage());
         }
     }
 
@@ -96,14 +135,6 @@ public class UlamGreedySearch {
             generateRecursive(arr, l + 1, perms);
             swap(arr, l, i);
         }
-    }
-
-    // Compare two permutations lexicographically
-    static int lexCompare(int[] a, int[] b) {
-        for (int i = 0; i < a.length; i++) {
-            if (a[i] != b[i]) return Integer.compare(a[i], b[i]);
-        }
-        return 0;
     }
 
     // Checks if a permutation can be added to solutionSet (distance >= d from all existing ones)
@@ -136,7 +167,7 @@ public class UlamGreedySearch {
         return n - dp[n][n]; // n - LCS length
     }
 
-    // Save solution set to a file with descriptive name
+    // Save current greedy solution to a file
     static void saveSolutionToFile() {
         String filename = String.format("greedy_n%d_d%d_size%d.txt", n, d, solutionSet.size());
         try (PrintWriter out = new PrintWriter(new FileWriter(filename))) {
