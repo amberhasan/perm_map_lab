@@ -1,31 +1,56 @@
 import java.util.*;
 import java.io.*;
 
+/**
+ * Usage:
+ *   java UlamInterleaverSearch n d [--samples=20000] [--seed=42]
+ *
+ * Notes:
+ * - Tries all valid t (0..(n-1)/2 with n % (2t+1)==0). s = n/(2t+1).
+ * - For each (s,t), generates 'samples' random interleaved permutations by
+ *   shuffling each congruence class once per sample and merging.
+ * - Greedily keeps permutations with Ulam distance >= d from all kept ones.
+ * - Ulam distance uses O(n log n) LIS (patience sorting) on mapped indices.
+ */
 public class UlamInterleaverSearch {
     static int n, d;
-    static List<List<Integer>> bestPermutationArray = new ArrayList<>();
-    static int bestS, bestT;
+    static int bestS = -1, bestT = -1;
+    static List<int[]> bestPermutationArray = new ArrayList<>();
 
     public static void main(String[] args) {
         if (args.length < 2) {
-            System.err.println("Usage: java UlamInterleaverSearch n d");
+            System.err.println("Usage: java UlamInterleaverSearch n d [--samples=20000] [--seed=42]");
             System.exit(1);
         }
         n = Integer.parseInt(args[0]);
         d = Integer.parseInt(args[1]);
 
-        // Try all valid (s,t) combinations
+        long samples = 20000;
+        long seed = 42L;
+        for (int i = 2; i < args.length; i++) {
+            if (args[i].startsWith("--samples=")) {
+                samples = Long.parseLong(args[i].substring("--samples=".length()));
+            } else if (args[i].startsWith("--seed=")) {
+                seed = Long.parseLong(args[i].substring("--seed=".length()));
+            }
+        }
+
+        // Prebuild the 1..n array once
+        int[] universe = new int[n];
+        for (int i = 0; i < n; i++) universe[i] = i + 1;
+
+        // Try all valid (s,t)
         for (int t = 0; t <= (n - 1) / 2; t++) {
             int numClasses = 2 * t + 1;
             if (n % numClasses != 0) continue; // s must be integer
-
             int s = n / numClasses;
-            List<List<Integer>> candidatePA = buildPermutationArray(s, t);
 
-            System.out.printf("s=%d, t=%d -> found %d permutations%n", s, t, candidatePA.size());
+            List<int[]> candidate = sampleGreedyForST(universe, s, t, samples, seed);
+            System.out.printf("s=%d, t=%d -> kept %d permutations (from %d samples)%n",
+                    s, t, candidate.size(), samples);
 
-            if (candidatePA.size() > bestPermutationArray.size()) {
-                bestPermutationArray = candidatePA;
+            if (candidate.size() > bestPermutationArray.size()) {
+                bestPermutationArray = candidate;
                 bestS = s;
                 bestT = t;
             }
@@ -33,116 +58,94 @@ public class UlamInterleaverSearch {
         savePermutationArrayToFile();
     }
 
-    /**
-     * Build all permutations using interleaver structure for given s,t
-     * and greedily select a subset with Ulam distance >= d.
-     */
-    static List<List<Integer>> buildPermutationArray(int s, int t) {
-        // Step 1: divide into classes
-        List<List<Integer>> classes = new ArrayList<>();
-        for (int i = 0; i < (2*t+1); i++) classes.add(new ArrayList<>());
-        for (int i = 1; i <= n; i++) {
-            int idx = (i-1) % (2*t+1);
-            classes.get(idx).add(i);
+    /** Randomized greedy: generate 'samples' interleaved permutations, keep those far enough. */
+    static List<int[]> sampleGreedyForST(int[] universe, int s, int t, long samples, long seed) {
+        int numClasses = 2 * t + 1;
+        // Build class buckets (indices of elements belonging to each class)
+        int[][] classes = new int[numClasses][s];
+        for (int i = 0; i < n; i++) {
+            int idx = i % numClasses;
+            classes[idx][i / numClasses] = universe[i];
         }
 
-        // Step 2: generate all permutations for each class
-        List<List<List<Integer>>> classPermutations = new ArrayList<>();
-        for (List<Integer> cls : classes) {
-            classPermutations.add(generateAllPermutations(cls));
-        }
+        // Work buffers to avoid GC churn
+        int[] merged = new int[n];
 
-        // Step 3: interleave permutations from each class
-        List<List<Integer>> allInterleavedPermutations = interleaveClassPermutations(classPermutations);
+        Random rng = new Random(seed + 31L * numClasses + 1);
+        List<int[]> selected = new ArrayList<>();
+        // Pre-allocate arrays used for O(n log n) LIS mapping
+        int[] posInOther = new int[n + 1]; // value -> position in 'other'
+        int[] mapped = new int[n];         // a mapped through 'other' positions
 
-        // Step 4: greedy selection by Ulam distance
-        List<List<Integer>> selectedPermutations = new ArrayList<>();
-        for (List<Integer> candidate : allInterleavedPermutations) {
-            if (isFarEnough(candidate, selectedPermutations)) {
-                selectedPermutations.add(candidate);
+        for (long iter = 0; iter < samples; iter++) {
+            // For each class, create a shuffled copy (Fisher-Yates)
+            // Then interleave into 'merged'
+            for (int classIndex = 0; classIndex < numClasses; classIndex++) {
+                shuffleInPlace(classes[classIndex], rng);
             }
-        }
-        return selectedPermutations;
-    }
+            interleaveIntoMerged(classes, numClasses, merged);
 
-    /** Generate all permutations of a list using recursion */
-    static List<List<Integer>> generateAllPermutations(List<Integer> elements) {
-        List<List<Integer>> result = new ArrayList<>();
-        permuteRecursive(elements, 0, result);
-        return result;
-    }
-
-    static void permuteRecursive(List<Integer> arr, int l, List<List<Integer>> result) {
-        if (l == arr.size()) {
-            result.add(new ArrayList<>(arr));
-        } else {
-            for (int i = l; i < arr.size(); i++) {
-                Collections.swap(arr, i, l);
-                permuteRecursive(arr, l+1, result);
-                Collections.swap(arr, i, l);
-            }
-        }
-    }
-
-    /** Build all interleavings (Cartesian product of class permutations) */
-    static List<List<Integer>> interleaveClassPermutations(List<List<List<Integer>>> classPermutations) {
-        List<List<Integer>> results = new ArrayList<>();
-        interleaveRecursive(classPermutations, 0, new ArrayList<>(), results);
-        return results;
-    }
-
-    static void interleaveRecursive(List<List<List<Integer>>> classPermutations,
-                                    int depth,
-                                    List<List<Integer>> current,
-                                    List<List<Integer>> results) {
-        if (depth == classPermutations.size()) {
-            results.add(mergeClasses(current, classPermutations.size()));
-            return;
-        }
-        for (List<Integer> choice : classPermutations.get(depth)) {
-            current.add(choice);
-            interleaveRecursive(classPermutations, depth+1, current, results);
-            current.remove(current.size()-1);
-        }
-    }
-
-    /** Merge chosen permutations into a single interleaved permutation */
-    static List<Integer> mergeClasses(List<List<Integer>> chosenPerms, int numClasses) {
-        List<Integer> merged = new ArrayList<>(Collections.nCopies(n, 0));
-        for (int classIndex = 0; classIndex < numClasses; classIndex++) {
-            List<Integer> perm = chosenPerms.get(classIndex);
-            int pos = 0;
-            for (int i = 0; i < n; i++) {
-                if (i % numClasses == classIndex) {
-                    merged.set(i, perm.get(pos++));
+            // Greedy accept if far enough from all previously kept
+            boolean ok = true;
+            for (int[] kept : selected) {
+                if (ulamDistanceFast(merged, kept, posInOther, mapped) < d) {
+                    ok = false;
+                    break;
                 }
             }
-        }
-        return merged;
-    }
-
-    /** Check if candidate permutation is far enough (Ulam distance >= d) from all chosen ones */
-    static boolean isFarEnough(List<Integer> candidate, List<List<Integer>> selectedPermutations) {
-        for (List<Integer> existing : selectedPermutations) {
-            if (ulamDistance(candidate, existing) < d) {
-                return false;
+            if (ok) {
+                selected.add(Arrays.copyOf(merged, n));
             }
         }
-        return true;
+        return selected;
     }
 
-    /** Compute Ulam distance = n - LCS length */
-    static int ulamDistance(List<Integer> a, List<Integer> b) {
-        int[][] dp = new int[n+1][n+1];
-        for (int i = 1; i <= n; i++) {
-            for (int j = 1; j <= n; j++) {
-                if (a.get(i-1).equals(b.get(j-1)))
-                    dp[i][j] = dp[i-1][j-1] + 1;
-                else
-                    dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+    /** Fisher–Yates in-place shuffle of an int[] */
+    static void shuffleInPlace(int[] a, Random rng) {
+        for (int i = a.length - 1; i > 0; i--) {
+            int j = rng.nextInt(i + 1);
+            int tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+        }
+    }
+
+    /** Interleave class arrays into one permutation: positions i where i % numClasses == c come from classes[c] in order. */
+    static void interleaveIntoMerged(int[][] classes, int numClasses, int[] out) {
+        int s = classes[0].length;
+        // For each class, write its s items into positions congruent to classIndex mod numClasses
+        for (int classIndex = 0; classIndex < numClasses; classIndex++) {
+            int pos = 0;
+            for (int i = classIndex; i < out.length; i += numClasses) {
+                out[i] = classes[classIndex][pos++];
             }
         }
-        return n - dp[n][n];
+    }
+
+    /**
+     * Ulam distance for permutations in O(n log n).
+     * Given two permutations a,b over 1..n:
+     * 1) Build posInOther[val] = index of val in b
+     * 2) Map a -> sequence of indices posInOther[a[i]]
+     * 3) Ulam = n - LIS(mapped)
+     */
+    static int ulamDistanceFast(int[] a, int[] b, int[] posInOther, int[] mapped) {
+        final int n = a.length;
+        for (int i = 0; i < n; i++) posInOther[b[i]] = i;
+        for (int i = 0; i < n; i++) mapped[i] = posInOther[a[i]];
+        int lis = lisLength(mapped);
+        return n - lis;
+    }
+
+    /** Patience sorting LIS length in O(n log n) for int[] */
+    static int lisLength(int[] arr) {
+        int[] tails = new int[arr.length];
+        int size = 0;
+        for (int x : arr) {
+            int i = Arrays.binarySearch(tails, 0, size, x);
+            if (i < 0) i = -i - 1;
+            tails[i] = x;
+            if (i == size) size++;
+        }
+        return size;
     }
 
     /** Save the best permutation array to a file */
@@ -150,8 +153,13 @@ public class UlamInterleaverSearch {
         String filename = String.format("best_PA_n%d_d%d_s%d_t%d_size%d.txt",
                 n, d, bestS, bestT, bestPermutationArray.size());
         try (PrintWriter out = new PrintWriter(new FileWriter(filename))) {
-            for (List<Integer> perm : bestPermutationArray) {
-                out.println(perm);
+            for (int[] perm : bestPermutationArray) {
+                // Print as space-separated values
+                for (int i = 0; i < perm.length; i++) {
+                    if (i > 0) out.print(' ');
+                    out.print(perm[i]);
+                }
+                out.println();
             }
             System.out.println("Saved best solution to " + filename);
         } catch (IOException e) {
