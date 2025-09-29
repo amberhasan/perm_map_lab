@@ -38,15 +38,36 @@ public class UlamGreedySearch {
 
         System.out.println("Running UlamGreedySearch with n=" + n + " and d=" + d);
 
-        // Main algorithm
-        greedySearch();
+        // --- Infinite loop: keep running greedy search ---
+        int run = 1;
+        while (true) {
+            System.out.println("\n==========================");
+            System.out.println("🔁 Run #" + run + " starting...");
+            System.out.println("==========================");
 
-        // Print and save result
-        System.out.println("\n✅ Greedy search finished. Found set size: " + solutionSet.size());
-        for (int[] perm : solutionSet) {
-            System.out.println(Arrays.toString(perm));
+            // Reset solution set each iteration
+            solutionSet.clear();
+
+            // Main algorithm
+            greedySearch();
+
+            // Print and save result
+            System.out.println("\n✅ Greedy search finished. Found set size: " + solutionSet.size());
+            for (int[] perm : solutionSet) {
+                System.out.println(Arrays.toString(perm));
+            }
+            saveSolutionToFile();
+
+            System.out.println("Run #" + run + " complete. Sleeping 1s before next run. Press Ctrl+C to stop.\n");
+
+            try {
+                Thread.sleep(1000); // prevent CPU overload between runs
+            } catch (InterruptedException e) {
+                break;
+            }
+
+            run++;
         }
-        saveSolutionToFile();
     }
 
     static void greedySearch() {
