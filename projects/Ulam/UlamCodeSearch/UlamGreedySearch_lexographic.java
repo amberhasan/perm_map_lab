@@ -1,15 +1,13 @@
 import java.util.*;
 import java.io.*;
 
-public class UlamGreedySearch {
+public class UlamGreedySearch_lexographic {
     static int n; // permutation length
     static int d; // minimum Ulam distance
     static int randomSeedCount = 0; // number of random permutations to pick initially
     static List<int[]> solutionSet = new ArrayList<>(); // stores the final set of permutations
 
     public static void main(String[] args) {
-        solutionSet = new ArrayList<>(); // stores the final set of permutations
-
         // --- Parse input ---
         // Optional: -r k enables random seeding with k permutations
         List<String> argList = new ArrayList<>(Arrays.asList(args));
@@ -40,15 +38,36 @@ public class UlamGreedySearch {
 
         System.out.println("Running UlamGreedySearch with n=" + n + " and d=" + d);
 
-        // Main algorithm
-        greedySearch();
+        // --- Infinite loop: keep running greedy search ---
+        int run = 1;
+        while (true) {
+            System.out.println("\n==========================");
+            System.out.println("🔁 Run #" + run + " starting...");
+            System.out.println("==========================");
 
-        // Print and save result
-        System.out.println("\n✅ Greedy search finished. Found set size: " + solutionSet.size());
-        for (int[] perm : solutionSet) {
-            System.out.println(Arrays.toString(perm));
+            // Reset solution set each iteration
+            solutionSet.clear();
+
+            // Main algorithm
+            greedySearch();
+
+            // Print and save result
+            System.out.println("\n✅ Greedy search finished. Found set size: " + solutionSet.size());
+            for (int[] perm : solutionSet) {
+                System.out.println(Arrays.toString(perm));
+            }
+            saveSolutionToFile();
+
+            System.out.println("Run #" + run + " complete. Sleeping 1s before next run. Press Ctrl+C to stop.\n");
+
+            try {
+                Thread.sleep(1000); // prevent CPU overload between runs
+            } catch (InterruptedException e) {
+                break;
+            }
+
+            run++;
         }
-        saveSolutionToFile();
     }
 
     static void greedySearch() {
@@ -68,7 +87,8 @@ public class UlamGreedySearch {
                 }
             }
             // Sort remaining permutations back into lex order for reproducible greedy step
-            allPerms.sort(UlamGreedySearch::lexCompare);
+            // Collections.shuffle(allPerms, new Random());
+            // allPerms.sort(UlamGreedySearch_random::lexCompare);
         }
 
         // --- Step 2: Greedy lexicographic construction ---

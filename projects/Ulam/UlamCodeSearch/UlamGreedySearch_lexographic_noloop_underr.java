@@ -1,15 +1,13 @@
 import java.util.*;
 import java.io.*;
 
-public class UlamGreedySearch {
+public class UlamGreedySearch_lexographic_noloop_underr {
     static int n; // permutation length
     static int d; // minimum Ulam distance
     static int randomSeedCount = 0; // number of random permutations to pick initially
     static List<int[]> solutionSet = new ArrayList<>(); // stores the final set of permutations
 
     public static void main(String[] args) {
-        solutionSet = new ArrayList<>(); // stores the final set of permutations
-
         // --- Parse input ---
         // Optional: -r k enables random seeding with k permutations
         List<String> argList = new ArrayList<>(Arrays.asList(args));
@@ -68,7 +66,7 @@ public class UlamGreedySearch {
                 }
             }
             // Sort remaining permutations back into lex order for reproducible greedy step
-            allPerms.sort(UlamGreedySearch::lexCompare);
+            allPerms.sort(UlamGreedySearch_lexographic_noloop_underr::lexCompare);
         }
 
         // --- Step 2: Greedy lexicographic construction ---
