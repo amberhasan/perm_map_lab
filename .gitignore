@@ -1,3 +1,7 @@
 ulam_env/
 Interleaving/ulam_env/
 __pycache__/
+ulam_env/
+*/ulam_env/
+__pycache__/
+*/__pycache__/
