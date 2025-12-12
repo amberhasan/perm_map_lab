@@ -2,18 +2,28 @@ import java.util.*;
 
 public class UlamCodeBuilder {
     // ---------- Parameters ----------
-    static int t = 2;                      // choose t
-    static int tracks = 2 * t + 1;         // 5
-    static int s = 9;                      // elements per track
-    static int n = s * tracks;             // 45
-    static int minTrackHam = 4 * t + 1;    // 9
+    static int t;                   // choose t
+    static int tracks;              // 2t+1
+    static int s;                   // elements per track
+    static int n;                   // total = s*tracks
+    static int minTrackHam;         // 4t+1
 
     public static void main(String[] args) {
-        // 1) Build congruence classes P_i
-        List<int[]> P = buildClasses(n, tracks); // P[0] = P1, etc.
+        // 1) Parse parameters (default t=2, s=9)
+        t = (args.length > 0) ? Integer.parseInt(args[0]) : 2;
+        s = (args.length > 1) ? Integer.parseInt(args[1]) : 9;
+        tracks = 2 * t + 1;
+        n = s * tracks;
+        minTrackHam = 4 * t + 1;
+
+        System.out.println("Parameters: t=" + t + ", s=" + s +
+                ", tracks=" + tracks + ", n=" + n);
+
+        // 2) Build congruence classes P_i
+        List<int[]> P = buildClasses(n, tracks);
         printClasses(P);
 
-        // 2) Build Ci as all cyclic shifts of each P_i ordering
+        // 3) Build Ci as all cyclic shifts of each P_i ordering
         List<List<int[]>> C = new ArrayList<>();
         for (int i = 0; i < tracks; i++) {
             C.add(cyclicShifts(P.get(i)));
@@ -21,7 +31,7 @@ public class UlamCodeBuilder {
         // quick sanity: Hamming distance inside each Ci is s (>= 4t+1)
         sanityCheckTrackHamming(C);
 
-        // 3) Interleave one codeword from each Ci (here: first choice)
+        // 4) Interleave one codeword from each Ci (here: first choice)
         int[] codeword = interleave(Arrays.asList(
                 C.get(0).get(0), C.get(1).get(0), C.get(2).get(0),
                 C.get(3).get(0), C.get(4).get(0)
@@ -30,7 +40,7 @@ public class UlamCodeBuilder {
         System.out.println(Arrays.toString(codeword));
         System.out.println("Is permutation of [1.." + n + "]? " + isPermutation(codeword, n));
 
-        // 4) Example: build a second codeword using different shifts and compute Ulam distance
+        // 5) Example: build a second codeword using different shifts and compute Ulam distance
         int[] codeword2 = interleave(Arrays.asList(
                 C.get(0).get(1), C.get(1).get(2), C.get(2).get(3),
                 C.get(3).get(4), C.get(4).get(5)
@@ -38,12 +48,13 @@ public class UlamCodeBuilder {
         int du = ulamDistance(codeword, codeword2);
         System.out.println("Ulam distance between two codewords: " + du);
 
-        // 5) Size of the constructed code C (cartesian product of shifts)
+        // 6) Size of the constructed code C (cartesian product of shifts)
         long sizeC = 1;
-        for (List<int[]> Ci : C) sizeC *= Ci.size(); // here 9^5
-        System.out.println("Code size |C| = product_i |C_i| = " + sizeC + " (expected 9^5 = 59049).");
+        for (List<int[]> Ci : C) sizeC *= Ci.size(); // here s^tracks
+        System.out.println("Code size |C| = product_i |C_i| = " + sizeC +
+                " (expected " + s + "^" + tracks + ").");
 
-        // Note: By Theorem 17, min Ulam distance of C is >= 2t+1 (=5) when each Ci has min Hamming >= 4t+1 (=9).
+        // Note: By Theorem 17, min Ulam distance of C is >= 2t+1
         System.out.println("Theorem 17 guarantee: d_U(C) >= " + (2 * t + 1));
     }
 
@@ -124,10 +135,10 @@ public class UlamCodeBuilder {
     // Ulam distance = n - LCS
     static int ulamDistance(int[] a, int[] b) {
         return a.length - lcsLength(a, b);
-        // For large runs, you’d want LIS-on-mapped permutation; DP is fine for n=45 tests.
+        // For large runs, you’d want LIS-on-mapped permutation; DP is fine for small n.
     }
 
-    // Standard DP LCS (O(n^2) with small constants for n=45)
+    // Standard DP LCS (O(n^2))
     static int lcsLength(int[] a, int[] b) {
         int n = a.length, m = b.length;
         int[][] dp = new int[n + 1][m + 1];
