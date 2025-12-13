@@ -2,6 +2,7 @@ import java.util.*;
 import java.io.*;
 
 public class UlamDistanceChecker {
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.out.println("Usage: java UlamDistanceChecker <filename>");
@@ -18,10 +19,23 @@ public class UlamDistanceChecker {
 
         // n = length of a permutation (assume all have same length)
         int n = solution.get(0).length;
-        int d = computeMinDistance(solution, n);
 
-        System.out.println("n = " + n + ", d = " + d);
+        // compute min distance AND witness pair
+        Result result = computeMinDistanceWithWitness(solution, n);
+
+        System.out.println("n = " + n + ", d = " + result.minDist);
+
+        if (result.i != -1) {
+            System.out.println("\nExample pair achieving minimum Ulam distance:");
+            System.out.println(Arrays.toString(solution.get(result.i)));
+            System.out.println(Arrays.toString(solution.get(result.j)));
+            System.out.println("Verified distance = " +
+                    ulamDistance(solution.get(result.i),
+                                 solution.get(result.j), n));
+        }
     }
+
+    /* -------------------- FILE INPUT -------------------- */
 
     // Read permutations from a file (space-separated or bracketed)
     static List<int[]> readPermutationsFromFile(String filename) {
@@ -32,13 +46,13 @@ public class UlamDistanceChecker {
                 line = line.trim();
                 if (line.isEmpty()) continue;
 
-                /* Skip comment lines */
-                if (line.startsWith("/*") || line.startsWith("//") || line.startsWith("#")) continue;
-
+                // Skip comment lines
+                if (line.startsWith("/*") || line.startsWith("//") || line.startsWith("#"))
+                    continue;
 
                 // Handle either "[1, 2, 3]" or "1 2 3"
                 if (line.startsWith("[") && line.endsWith("]")) {
-                    line = line.substring(1, line.length() - 1); // remove brackets
+                    line = line.substring(1, line.length() - 1);
                     String[] parts = line.split(",");
                     int[] perm = new int[parts.length];
                     for (int i = 0; i < parts.length; i++) {
@@ -60,21 +74,49 @@ public class UlamDistanceChecker {
         return perms;
     }
 
-    // Compute minimum Ulam distance across all pairs
-    static int computeMinDistance(List<int[]> solution, int n) {
+    /* -------------------- DISTANCE COMPUTATION -------------------- */
+
+    // Helper class to return both min distance and witness indices
+    static class Result {
+        int minDist;
+        int i;
+        int j;
+
+        Result(int minDist, int i, int j) {
+            this.minDist = minDist;
+            this.i = i;
+            this.j = j;
+        }
+    }
+
+    // Compute minimum Ulam distance AND record a pair achieving it
+    static Result computeMinDistanceWithWitness(List<int[]> solution, int n) {
         int minDist = Integer.MAX_VALUE;
+        int wi = -1, wj = -1;
+
         for (int i = 0; i < solution.size(); i++) {
             for (int j = i + 1; j < solution.size(); j++) {
                 int dist = ulamDistance(solution.get(i), solution.get(j), n);
-                minDist = Math.min(minDist, dist);
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    wi = i;
+                    wj = j;
+                }
             }
         }
-        return (minDist == Integer.MAX_VALUE ? 0 : minDist);
+
+        if (minDist == Integer.MAX_VALUE) {
+            minDist = 0;
+        }
+
+        return new Result(minDist, wi, wj);
     }
 
     // Compute Ulam distance using LCS dynamic programming
     static int ulamDistance(int[] a, int[] b, int n) {
         int[][] dp = new int[n + 1][n + 1];
+
         for (int i = 1; i <= n; i++) {
             for (int j = 1; j <= n; j++) {
                 if (a[i - 1] == b[j - 1])
