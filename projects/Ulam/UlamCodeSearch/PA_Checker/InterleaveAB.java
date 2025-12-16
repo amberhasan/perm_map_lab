@@ -40,12 +40,6 @@ public class InterleaveAB {
                 }
 
                 out.println();
-                out.println("/* REVERSE */");
-                for (int[] q : built) {
-                    int[] r = reverse(q);
-                    printPerm(out, r);
-                }
-
                 out.println();
                 pid++;
             }
