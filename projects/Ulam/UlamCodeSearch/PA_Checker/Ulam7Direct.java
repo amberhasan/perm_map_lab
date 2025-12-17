@@ -3,11 +3,11 @@ import java.util.*;
 
 public class Ulam7Direct {
 
-    static int n = 7;
+    static int n = 8;
     static List<int[]> code = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
-        String outFile = (args.length >= 1) ? args[0] : "U7_d2_Levenshtein.txt";
+        String outFile = (args.length >= 1) ? args[0] : "U8_d2_Levenshtein.txt";
 
         int[] a = new int[n];
         for (int i = 0; i < n; i++) a[i] = i + 1;
