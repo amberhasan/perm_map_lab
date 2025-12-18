@@ -15,9 +15,9 @@ public class BinaryUlamV_Greedy {
     // =========================
     // PARAMETERS
     // =========================
-    static int N = 12;          // length
-    static int W = 2;           // number of 1s
-    static int D = 10;           // minimum Ulam distance
+    static int N = 20;          // length
+    static int W = 10;           // number of 1s
+    static int D = 4;           // minimum Ulam distance
     static int ITER = 20000;    // random restarts
     static int VERIFY = 1;      // set to 1 to verify final clique
 
