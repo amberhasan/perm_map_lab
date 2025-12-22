@@ -1,4 +1,5 @@
 import java.util.*;
+import java.io.*;
 
 public class UlamCodeSearchSJT {
 
@@ -30,19 +31,28 @@ public class UlamCodeSearchSJT {
         saveCodeToFile(code, n, d);
     }
 
-    static int ulamDistance(int[] a, int[] b) {
-        int n = a.length;
-        int[][] dp = new int[n+1][n+1];
+    static int ulamDistance(int[] p, int[] q) {
+        int n = p.length;
 
-        for (int i = 1; i <= n; i++) {
-            for (int j = 1; j <= n; j++) {
-                if (a[i-1] == b[j-1])
-                    dp[i][j] = dp[i-1][j-1] + 1;
-                else
-                    dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
-            }
+        // pos[x] = index of x in q
+        int[] pos = new int[n + 1];
+        for (int i = 0; i < n; i++) {
+            pos[q[i]] = i;
         }
-        return n - dp[n][n];
+
+        // Build sequence s[i] = pos[p[i]]
+        int[] tails = new int[n];
+        int len = 0;
+
+        for (int i = 0; i < n; i++) {
+            int x = pos[p[i]];
+            int idx = Arrays.binarySearch(tails, 0, len, x);
+            if (idx < 0) idx = -idx - 1;
+            tails[idx] = x;
+            if (idx == len) len++;
+        }
+
+        return n - len; // exact Ulam distance
     }
 
     static void saveCodeToFile(List<int[]> code, int n, int d) {
