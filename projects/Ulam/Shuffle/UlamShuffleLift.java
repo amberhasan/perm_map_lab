@@ -1,115 +1,75 @@
 import java.util.*;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.LocalDateTime;
 
 /**
- * Implements the multistage "block shuffle" construction from:
+ * Multistage "block shuffle" construction inspired by:
  * "Explicit Good Codes Approaching Distance 1 in Ulam Metric"
  *
- * Core:
- *  - n = q^ell
- *  - Positions are indexed by ell base-q digits.
- *  - At stage i (1..ell), we partition positions into blocks of size q by fixing all digits except digit i.
- *  - For each block, we apply a "ground permutation" sigma in D to the i-th digit.
- *    The choice of sigma for each block is given by a stage shuffler w^(i) of length n/q over alphabet [p].
+ * Experimental PA builder for U(n,d) using structured shuffle-lift sampling.
  *
- * Also includes O(n log n) Ulam distance between permutations via LIS of inverse composition.
+ * Example runs:
+ *   java UlamShuffleLift q=3 n=243 d=180 samples=20000
+ *   java UlamShuffleLift n=81 d=60
  */
 public class UlamShuffleLift {
 
-    // -----------------------------
+    // =====================================================
     // Construction
-    // -----------------------------
+    // =====================================================
 
-    /**
-     * Build permutation of [0..n-1] using the multistage construction.
-     *
-     * @param q base
-     * @param ell number of stages, n=q^ell
-     * @param D ground permutations, D[c][x] = sigma_c(x), each of length q, values 0..q-1
-     * @param shufflers shufflers[stage][blockIndex] = c in [0..p-1], stage indexed 0..ell-1
-     *                 Each stage has length n/q blocks.
-     * @return permutation pi as int[n], pi[pos] = value at position pos
-     */
     public static int[] build(int q, int ell, int[][] D, int[][] shufflers) {
         int n = ipow(q, ell);
-        int p = D.length;
 
         if (shufflers.length != ell)
-            throw new IllegalArgumentException("Need exactly ell shufflers (one per stage).");
+            throw new IllegalArgumentException("Need exactly ell shufflers.");
 
-        for (int c = 0; c < p; c++) {
-            if (D[c].length != q) throw new IllegalArgumentException("Each ground permutation must have length q.");
-        }
-
-        // start with identity permutation pi^(0)[pos] = pos
         int[] pi = new int[n];
         for (int i = 0; i < n; i++) pi[i] = i;
 
-        // Precompute base-q digits for each position: digits[pos][0..ell-1]
-        // We'll use digit index 0..ell-1 (stage i corresponds to digit i, but paper uses 1..ell).
+        // Precompute base-q digits for each position
         int[][] digits = new int[n][ell];
         for (int pos = 0; pos < n; pos++) {
             int x = pos;
-            for (int d = ell - 1; d >= 0; d--) { // most-significant at 0, least at ell-1 (consistent)
+            for (int d = ell - 1; d >= 0; d--) {
                 digits[pos][d] = x % q;
                 x /= q;
             }
         }
 
-        // For each stage i, we apply within each block that varies digit i
         for (int stage = 0; stage < ell; stage++) {
             int blocks = n / q;
             if (shufflers[stage].length != blocks)
-                throw new IllegalArgumentException("Stage " + stage + " shuffler must have length n/q = " + blocks);
+                throw new IllegalArgumentException("Stage " + stage + " shuffler must have length " + blocks);
 
             int[] next = new int[n];
 
-            // Canonical mapping from (alpha,beta) to blockIndex:
-            // Here we take the tuple of all digits except the stage digit, in lex order, to index blocks.
-            // blockIndex = rank of the (ell-1)-tuple.
-            //
-            // For each position, compute its blockIndex by removing digit 'stage'.
-            // Then within that block, the stage digit x in [0..q-1] is mapped to y = sigma_c[x].
-            // next[pos(alpha,x,beta)] = pi[pos(alpha,y,beta)].
             for (int pos = 0; pos < n; pos++) {
                 int blockIndex = blockIndexExcludingDigit(digits[pos], q, stage);
                 int c = shufflers[stage][blockIndex];
-                if (c < 0 || c >= p) throw new IllegalArgumentException("Invalid ground perm index in shuffler.");
-
                 int x = digits[pos][stage];
                 int y = D[c][x];
-
-                // compute source position: same digits except stage digit replaced by y
                 int srcPos = replaceDigitAndPack(digits[pos], q, stage, y);
                 next[pos] = pi[srcPos];
             }
-
             pi = next;
         }
-
         return pi;
     }
 
-    /**
-     * Computes canonical block index by taking all digits except excludedDigit
-     * as an (ell-1)-digit base-q number.
-     */
     private static int blockIndexExcludingDigit(int[] dig, int q, int excludedDigit) {
         int idx = 0;
         for (int i = 0; i < dig.length; i++) {
-            if (i == excludedDigit) continue;
-            idx = idx * q + dig[i];
+            if (i != excludedDigit) idx = idx * q + dig[i];
         }
         return idx;
     }
 
-    /**
-     * Packs digits into position index, replacing digit 'posDigit' with newVal.
-     */
     private static int replaceDigitAndPack(int[] dig, int q, int posDigit, int newVal) {
         int idx = 0;
         for (int i = 0; i < dig.length; i++) {
-            int v = (i == posDigit) ? newVal : dig[i];
-            idx = idx * q + v;
+            idx = idx * q + (i == posDigit ? newVal : dig[i]);
         }
         return idx;
     }
@@ -120,32 +80,21 @@ public class UlamShuffleLift {
         return r;
     }
 
-    // -----------------------------
-    // Fast Ulam distance for permutations
-    // -----------------------------
+    // =====================================================
+    // Ulam Distance
+    // =====================================================
 
-    /**
-     * Ulam distance for permutations pi, pj in S_n:
-     * d_U = n - LCS(pi, pj)
-     * For permutations, LCS(pi, pj) = LIS( inv(pi) composed with pj ) in one-line notation.
-     */
     public static int ulamDistance(int[] pi, int[] pj) {
         int n = pi.length;
-        if (pj.length != n) throw new IllegalArgumentException("Permutations must have same length.");
-
         int[] inv = new int[n];
-        for (int pos = 0; pos < n; pos++) inv[pi[pos]] = pos;
+        for (int i = 0; i < n; i++) inv[pi[i]] = i;
 
         int[] seq = new int[n];
-        for (int pos = 0; pos < n; pos++) seq[pos] = inv[pj[pos]];
+        for (int i = 0; i < n; i++) seq[i] = inv[pj[i]];
 
-        int lis = lisLength(seq);
-        return n - lis;
+        return n - lisLength(seq);
     }
 
-    /**
-     * LIS length in O(n log n) for int array.
-     */
     private static int lisLength(int[] a) {
         int[] tails = new int[a.length];
         int size = 0;
@@ -158,47 +107,134 @@ public class UlamShuffleLift {
         return size;
     }
 
-    // -----------------------------
-    // Demo / Example
-    // -----------------------------
-    public static void main(String[] args) {
-        // Example matching the paper's Figure-2 style small demo:
-        // q=3, ell=2 => n=9
-        int q = 3, ell = 2;
+    // =====================================================
+    // Build PA via sampling
+    // =====================================================
+
+    public static List<int[]> buildUlamPA(int q, int ell, int[][] D, int samples, int minDistance) {
+        Random rng = new Random();
         int n = ipow(q, ell);
+        int blocks = n / q;
+        int p = D.length;
 
-        // Ground set D of size p=4 (each is a permutation of [0,1,2])
-        // Here written as arrays sigma[x] = y
+        List<int[]> PA = new ArrayList<>();
+
+        for (int t = 0; t < samples; t++) {
+            int[][] shufflers = new int[ell][blocks];
+            for (int i = 0; i < ell; i++)
+                for (int j = 0; j < blocks; j++)
+                    shufflers[i][j] = rng.nextInt(p);
+
+            int[] pi = build(q, ell, D, shufflers);
+
+            boolean ok = true;
+            for (int[] pj : PA) {
+                if (ulamDistance(pi, pj) < minDistance) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) PA.add(pi);
+        }
+        return PA;
+    }
+
+    // =====================================================
+    // Argument Parsing Helpers
+    // =====================================================
+
+    private static Map<String, Integer> parseArgs(String[] args) {
+        Map<String, Integer> map = new HashMap<>();
+        for (String arg : args) {
+            if (!arg.contains("=")) continue;
+            String[] parts = arg.split("=");
+            if (parts.length != 2) continue;
+            map.put(parts[0].trim(), Integer.parseInt(parts[1].trim()));
+        }
+        return map;
+    }
+
+    private static int computeEllIfPower(int n, int q) {
+        int ell = 0;
+        int cur = 1;
+        while (cur < n) {
+            cur *= q;
+            ell++;
+        }
+        if (cur != n)
+            throw new IllegalArgumentException("n must be a power of q. Got n=" + n + ", q=" + q);
+        return ell;
+    }
+
+    // =====================================================
+    // Main
+    // =====================================================
+
+    public static void main(String[] args) {
+
+        // ----- Defaults -----
+        int q = 3;
+        int n = 81;
+        int d = 60;
+        int samples = 50_000;
+
+        // ----- Parse key=value args -----
+        try {
+            Map<String, Integer> params = parseArgs(args);
+            if (params.containsKey("q")) q = params.get("q");
+            if (params.containsKey("n")) n = params.get("n");
+            if (params.containsKey("d")) d = params.get("d");
+            if (params.containsKey("samples")) samples = params.get("samples");
+        } catch (Exception e) {
+            System.err.println("Usage: java UlamShuffleLift q=<q> n=<n> d=<d> samples=<samples>");
+            return;
+        }
+
+        int ell;
+        try {
+            ell = computeEllIfPower(n, q);
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return;
+        }
+
+        // ----- Ground permutations D ⊆ S_q -----
         int[][] D = {
-                {0,1,2}, // 012
-                {2,1,0}, // 210
-                {1,0,2}, // 102
-                {1,2,0}  // 120
+                {0,1,2},
+                {2,1,0},
+                {1,0,2},
+                {1,2,0}
         };
 
-        // shufflers: ell stages, each length n/q = 3
-        // Stage 1 shuffler w^(1) = 3 0 1   (over alphabet [0..3])
-        // Stage 2 shuffler w^(2) = 2 2 3
-        int[][] shufflers = {
-                {3,0,1},
-                {2,2,3}
-        };
+        System.out.println("====================================");
+        System.out.println("UlamShuffleLift experiment");
+        System.out.println("q = " + q);
+        System.out.println("n = " + n);
+        System.out.println("ell = " + ell);
+        System.out.println("d = " + d);
+        System.out.println("samples = " + samples);
+        System.out.println("====================================");
 
-        int[] pi = build(q, ell, D, shufflers);
-        System.out.println("n=" + n);
-        System.out.println("Constructed permutation pi:");
-        System.out.println(Arrays.toString(pi));
+        List<int[]> PA = buildUlamPA(q, ell, D, samples, d);
 
-        // Compare with a second codeword (change shuffler a bit)
-        int[][] shufflers2 = {
-                {3,1,1},
-                {2,0,3}
-        };
-        int[] pj = build(q, ell, D, shufflers2);
+        System.out.println("PA size = " + PA.size());
 
-        int du = ulamDistance(pi, pj);
-        System.out.println("\nSecond permutation pj:");
-        System.out.println(Arrays.toString(pj));
-        System.out.println("\nUlam distance dU(pi,pj) = " + du);
+        // ----- Write results -----
+        String filename = "ulam_results_q" + q + "_n" + n + "_d" + d + ".txt";
+        try (FileWriter out = new FileWriter(filename, true)) {
+            out.write("====================================\n");
+            out.write("Timestamp: " + LocalDateTime.now() + "\n");
+            out.write("q = " + q + "\n");
+            out.write("n = " + n + "\n");
+            out.write("ell = " + ell + "\n");
+            out.write("d = " + d + "\n");
+            out.write("samples = " + samples + "\n");
+            out.write("PA size = " + PA.size() + "\n\n");
+        } catch (IOException e) {
+            System.err.println("Error writing results to file");
+            e.printStackTrace();
+        }
+
+        System.out.println("Results written to " + filename);
     }
 }
