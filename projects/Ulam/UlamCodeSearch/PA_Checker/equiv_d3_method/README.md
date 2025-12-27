@@ -146,3 +146,5 @@ This method exploits structure in the permutation space by recognizing that cert
 ## Author Notes
 
 This implementation was developed for research on permutation arrays in the Ulam metric. The equivalence class approach provides a systematic way to explore the search space while maintaining enough randomization to find diverse solutions.
+
+I created and used this program for U(7, 3). It got me a PA of size 56. Then I used the program improve_pa.cpp to get it to 64, beating the U(7, 3) result that was previously known to be 59. 
